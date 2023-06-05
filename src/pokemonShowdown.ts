@@ -5,7 +5,14 @@ export class PokemonShowdown {
   TYPE_IMAGE_HEIGHT = 14;
   TOOLTIP_CONTAINER_ID = "tooltipwrapper";
   POKEMON_TOOLTIP_SELECTOR = ".tooltip-pokemon, .tooltip-activepokemon";
-
+  STAT_MAP: { [key: string]: string;} = {
+    hp: "HP",
+    attack: "Atk",
+    defense: "Def",
+    "special-attack": "SpA",
+    "special-defense": "SpD",
+    speed: "Spe",
+  }
   pokeAPI: PokeAPI.PokeAPIClient;
 
   constructor(pokeAPI: PokeAPI.PokeAPIClient) {
@@ -55,6 +62,38 @@ export class PokemonShowdown {
   }
 
   /**
+   * Fetches the name of the pokemon from the passed tooltip element.
+   * @param tooltipElement 
+   * @returns The name of the pokemon found in the tooltip element.
+   */
+  getPokemonName(tooltipElement: Element): string {
+    const elements = tooltipElement.querySelector("h2")?.childNodes;
+    if (elements === undefined) {
+      return '';
+    }
+    if (elements[1].nodeName == 'SMALL') {
+      return this.removeParentheses((elements[1] as HTMLImageElement).childNodes[0].nodeValue!).trim().replace(' ', '-').toLowerCase();
+    }
+    return (tooltipElement.querySelector("h2") as HTMLImageElement).childNodes[0].nodeValue!.trim().replace(' ', '-').toLowerCase();
+  }
+
+  /**
+   * Removes the parentheses from the passed string.
+   * @param str 
+   * @returns The passed string with parentheses removed.
+   */
+  removeParentheses(str: string): string {
+    const firstIndex = str.indexOf('(');
+    const lastIndex = str.lastIndexOf(')');
+    
+    if (firstIndex !== -1 && lastIndex !== -1) {
+      return str.slice(firstIndex + 1, lastIndex);
+    }
+    
+    return str;
+  }
+
+  /**
    * Injects the type damage relations into the passed tooltip element.
    * @param tooltipElement
    */
@@ -69,8 +108,9 @@ export class PokemonShowdown {
     }
 
     const types = this.getTypes(tooltipElement);
+    const pokemon = this.getPokemonName(tooltipElement);
     const damageRelations = await this.getDamageRelationsForTypes(types);
-
+    const stats = await this.pokeAPI.getPokemonStats(pokemon);
     const sortedDamageRelations = Array.from(damageRelations.keys()).sort();
 
     for (const damageMultiplier of sortedDamageRelations) {
@@ -90,6 +130,33 @@ export class PokemonShowdown {
         headerNode.nextSibling
       );
     }
+
+    // Add stats element
+    const statsElement = document.createElement("h2");
+    const statsContent = document.createElement("small");
+    statsContent.innerText = "Stats: ";
+
+    const statsContainer = document.createElement("div");
+    statsContainer.style.display = "grid";
+    statsContainer.style.gridTemplateColumns = "repeat(3, 80px)";
+    statsContainer.style.gap = "0px 0"; // Adjust the vertical gap between rows
+    
+    for (const stat of stats.stats) {
+      const statElement = document.createElement("span");
+      statElement.innerText = `${this.STAT_MAP[stat.name]}: ${stat.base_stat} `;
+      statElement.style.padding = "3px";
+      statElement.style.fontSize = "10px";
+      statElement.style.textAlign = "left";
+      statsContainer.appendChild(statElement);
+    }
+
+    statsContent.appendChild(statsContainer);
+    statsElement.appendChild(statsContent);
+
+    headerNode.parentNode.insertBefore(
+      statsElement,
+      headerNode.nextSibling
+    )
 
     // Remove CSS top property to force tooltips to always render below the mouse
     // This prevents the added types from causing the tooltip to go offscreen.
